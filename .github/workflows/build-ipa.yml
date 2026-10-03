@@ -9,7 +9,6 @@ on:
 env:
   PROJECT_NAME: LiquidChat
   SCHEME_NAME: LiquidChat
-  XCODE_PATH: /Applications/Xcode_26.0.1.app
 
 jobs:
   build:
@@ -18,10 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26
+      - name: Select default Xcode (latest 26.x)
         run: |
-          sudo xcode-select -s ${{ env.XCODE_PATH }}/Contents/Developer
+          # 用 runner 默认 Xcode（已预装最新 iOS 26 SDK），不写死版本
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
+          echo "--- 可用 iOS SDK ---"
+          xcodebuild -showsdks | grep -i iphoneos || true
+          echo "--- 可用模拟器 ---"
+          xcrun simctl list runtimes | grep -i ios || true
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -48,8 +52,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            | xcpretty && exit ${PIPESTATUS[0]}
+            PROVISIONING_PROFILE_SPECIFIER=""
 
       - name: Package unsigned IPA
         run: |
