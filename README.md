@@ -97,21 +97,42 @@ git push -u origin main
 
 ---
 
-## 五、接入 API
+## 五、接入任意 OpenAI 兼容 API
 
-### DeepSeek（默认）
+**通用设计**：只要服务商提供 OpenAI 兼容的 `/chat/completions` 端点，就能接入。模型 ID 在设置里自由增删，不写死。
 
-1. 打开 [DeepSeek 开放平台](https://platform.deepseek.com/)
-2. 创建 API Key
-3. App 里：左上角菜单 → 设置 → 粘贴 API Key
-4. Base URL 保持默认 `https://api.deepseek.com`
+### 内置 Provider 识别（按 Base URL 自动判断）
 
-### 千问 Qwen
+| Provider | Base URL | 联网搜索 | 思考档位 |
+|---|---|---|---|
+| **千问 / 百炼** | `dashscope.aliyuncs.com/compatible-mode/v1` | `enable_search` | `enable_thinking` + `thinking_budget` |
+| **DeepSeek 官方** | `api.deepseek.com/v1` | Responses API（另述） | 由模型决定（reasoner） |
+| **OpenAI / Azure** | `api.openai.com/v1` | `web_search` 工具 | `reasoning_effort` |
+| **通用兼容**（OpenRouter / OneAPI / NewAPI…） | 任意 | `web_search` 工具 | `reasoning_effort` |
 
-1. 打开 [阿里云百炼](https://bailian.console.aliyun.com/)
-2. 创建 API Key
-3. App 里：设置 → Base URL 改成 `https://dashscope.aliyuncs.com/compatible-mode/v1`
-4. 粘贴千问 API Key
+### 模型管理
+
+设置页可**自由添加 / 删除模型**：
+- 模型 ID：填服务商要求的 ID（如 `gpt-5`、`qwen3-max`、`deepseek-chat`、`claude-sonnet-4-5`）
+- 显示名：自定义，显示在顶部选择器
+- 点选设为当前模型，左滑删除，自动持久化
+
+### 联网搜索（开关生效）
+
+点输入框「搜索」chip 开启，按 provider 自动注入对应参数（见上表）。千问/百炼/OpenAI 官方实测支持。
+
+### 思考档位（Think ⌄）
+
+点「Think」弹出四档：**关闭 / 低 / 中 / 高**。
+
+| 档位 | OpenAI `reasoning_effort` | 千问 `thinking_budget` |
+|---|---|---|
+| 关闭 | 不传 | 不传 |
+| 低 | `low` | 1024 tokens |
+| 中 | `medium` | 4096 tokens |
+| 高 | `high` | 16384 tokens |
+
+选择后档位显示在 Think 按钮上（紫色高亮）。思考过程实时显示在气泡上方。
 
 ---
 

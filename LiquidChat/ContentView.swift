@@ -10,7 +10,8 @@ struct ContentView: View {
             // 主界面
             VStack(spacing: 0) {
                 TopBar(
-                    model: $vm.model,
+                    models: vm.models,
+                    currentModelID: $vm.currentModelID,
                     onMenu: { withAnimation(.liquidBounce) { showDrawer.toggle() } },
                     onNew: { vm.newChat() }
                 )
@@ -45,8 +46,8 @@ struct ContentView: View {
 
                 ChatInputBar(
                     text: $vm.inputText,
-                    deepThink: $vm.deepThink,
                     search: $vm.search,
+                    thinkingEffort: $vm.thinkingEffort,
                     isRecording: $vm.isRecording,
                     isGenerating: vm.state != .idle,
                     onSend: vm.send,
@@ -76,7 +77,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView(vm: vm)
         }
         .alert("出错了", isPresented: $vm.showError) {
             Button("好的") {}

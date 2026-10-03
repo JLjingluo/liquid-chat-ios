@@ -1,7 +1,8 @@
 import Foundation
 
-/// DeepSeek / 千问兼容的 OpenAI 格式 API 客户端
-/// 默认指向 DeepSeek，可在设置里改成千问兼容端点
+/// 通用 OpenAI 兼容 API 客户端
+/// 支持任意 OpenAI 兼容端点：OpenAI 官方 / DeepSeek / 千问 / 百炼 / OpenRouter / OneAPI 等
+/// 按 provider 自动适配扩展参数：联网搜索、思考档位
 actor LLMService {
     static let shared = LLMService()
 
@@ -30,38 +31,58 @@ actor LLMService {
         var errorDescription: String? {
             switch self {
             case .invalidURL: return "无效的 API 地址"
-            case .httpError(let code, let body): return "请求失败（\(code)）：\(body.prefix(120))"
+            case .httpError(let code, let body): return "请求失败（\(code)）：\(body.prefix(160))"
             case .decodeError(let msg): return "解析响应失败：\(msg)"
             case .missingAPIKey: return "请先在设置中填写 API Key"
             }
         }
     }
 
-    /// 判断端点是否支持 enable_search 参数
-    /// 千问 / 阿里云百炼（含其托管的 deepseek、glm、kimi 模型）支持
-    /// DeepSeek 官方 api.deepseek.com 的 /chat/completions 不支持（需走 Responses API）
-    private static func supportsSearchParam(baseURL: String) -> Bool {
-        let host = baseURL.lowercased()
-        return host.contains("dashscope") ||
-               host.contains("aliyuncs") ||
-               host.contains("maas") ||
-               host.contains("qwencloud")
+    // MARK: - Provider 识别
+
+    /// 端点类型：决定扩展参数的注入方式
+    enum ProviderKind: Sendable {
+        case openai        // OpenAI 官方 / Azure / 遵循官方规范的中转
+        case dashscope     // 千问 / 阿里云百炼
+        case deepseek      // DeepSeek 官方
+        case generic       // 其他 OpenAI 兼容（OpenRouter、OneAPI、NewAPI…）
+
+        static func detect(baseURL: String) -> ProviderKind {
+            let host = baseURL.lowercased()
+            if host.contains("dashscope") || host.contains("aliyuncs")
+                || host.contains("maas") || host.contains("qwencloud") {
+                return .dashscope
+            }
+            if host.contains("api.deepseek.com") {
+                return .deepseek
+            }
+            if host.contains("api.openai.com") || host.contains("openai.azure.com")
+                || host.contains("azure.com") {
+                return .openai
+            }
+            return .generic
+        }
     }
 
-    func chatStream(
-        messages: [ChatMessage],
-        model: LLMModel,
-        apiKey: String,
-        baseURL: String,
-        enableSearch: Bool
-    ) -> AsyncThrowingStream<StreamResult, Error> {
+    // MARK: - 流式对话
+
+    struct ChatRequest: Sendable {
+        let messages: [ChatMessage]
+        let modelID: String
+        let apiKey: String
+        let baseURL: String
+        let enableSearch: Bool
+        let thinkingEffort: ThinkingEffort
+    }
+
+    func chatStream(_ req: ChatRequest) -> AsyncThrowingStream<StreamResult, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    guard !apiKey.isEmpty else {
+                    guard !req.apiKey.isEmpty else {
                         throw LLMError.missingAPIKey
                     }
-                    let endpoint = "\(baseURL)/chat/completions"
+                    let endpoint = Self.chatEndpoint(baseURL: req.baseURL)
                     guard let url = URL(string: endpoint) else {
                         throw LLMError.invalidURL
                     }
@@ -69,24 +90,11 @@ actor LLMService {
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                    request.setValue("Bearer \(req.apiKey)", forHTTPHeaderField: "Authorization")
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
 
-                    var payload: [String: Any] = [
-                        "model": model.rawValue,
-                        "messages": messages.map { ["role": $0.role.rawValue, "content": $0.text] },
-                        "stream": true,
-                        "temperature": 0.7
-                    ]
-
-                    // 联网搜索：千问 / 阿里云百炼（含其托管的 deepseek 模型）原生支持
-                    // enable_search 参数。仅在兼容端点上注入，避免 DeepSeek 官方
-                    // /chat/completions 因未知参数报错。
-                    if enableSearch && Self.supportsSearchParam(baseURL: baseURL) {
-                        payload["enable_search"] = true
-                        payload["search_options"] = ["enable_source": true]
-                    }
-
+                    let kind = ProviderKind.detect(baseURL: req.baseURL)
+                    let payload = Self.buildPayload(req: req, kind: kind)
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
                     let (bytes, response) = try await session.bytes(for: request)
@@ -98,7 +106,7 @@ actor LLMService {
                         var errBody = ""
                         for try await line in bytes.lines {
                             errBody += line
-                            if errBody.count > 300 { break }
+                            if errBody.count > 400 { break }
                         }
                         throw LLMError.httpError(http.statusCode, errBody)
                     }
@@ -120,7 +128,9 @@ actor LLMService {
                         }
 
                         let content = delta["content"] as? String
-                        let thinking = delta["reasoning_content"] as? String
+                        // 思考内容字段：DeepSeek/千问 reasoning_content，OpenAI o系列 reasoning
+                        let thinking = (delta["reasoning_content"] as? String)
+                            ?? (delta["reasoning"] as? String)
 
                         continuation.yield(StreamResult(
                             contentDelta: content,
@@ -138,5 +148,56 @@ actor LLMService {
                 }
             }
         }
+    }
+
+    // MARK: - 端点与 payload 构建
+
+    /// 规范 baseURL：用户可能填根地址或已带 /v1，统一拼到 chat/completions
+    static func chatEndpoint(baseURL: String) -> String {
+        var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if base.hasSuffix("/") { base.removeLast() }
+        if base.hasSuffix("/chat/completions") { return base }
+        return "\(base)/chat/completions"
+    }
+
+    /// 按 provider 构建 payload：核心字段各家一致，扩展参数分层注入
+    static func buildPayload(req: ChatRequest, kind: ProviderKind) -> [String: Any] {
+        var payload: [String: Any] = [
+            "model": req.modelID,
+            "messages": req.messages.map { ["role": $0.role.rawValue, "content": $0.text] },
+            "stream": true
+        ]
+
+        switch kind {
+        case .dashscope:
+            // 千问 / 百炼：enable_search + enable_thinking + thinking_budget
+            if req.enableSearch {
+                payload["enable_search"] = true
+                payload["search_options"] = ["enable_source": true]
+            }
+            if req.thinkingEffort != .off {
+                payload["enable_thinking"] = true
+                if let budget = req.thinkingEffort.dashscopeThinkingBudget {
+                    payload["thinking_budget"] = budget
+                }
+            }
+
+        case .openai, .generic:
+            // OpenAI 官方及规范中转：reasoning_effort 档位 + web_search 工具
+            if let effort = req.thinkingEffort.openAIReasoningEffort {
+                payload["reasoning_effort"] = effort
+            }
+            if req.enableSearch {
+                payload["tools"] = [["type": "web_search"]]
+                payload["tool_choice"] = "auto"
+            }
+
+        case .deepseek:
+            // DeepSeek 官方：思考由模型决定（reasoner 自动思考），无档位参数；
+            // 其 /chat/completions 不内置搜索，此处不注入避免 400。
+            break
+        }
+
+        return payload
     }
 }

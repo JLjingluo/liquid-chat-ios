@@ -106,7 +106,8 @@ struct ThinkingCard: View {
 // MARK: - 顶栏（严格复刻）
 
 struct TopBar: View {
-    @Binding var model: LLMModel
+    let models: [ModelConfig]
+    @Binding var currentModelID: String
     let onMenu: () -> Void
     let onNew: () -> Void
 
@@ -119,7 +120,7 @@ struct TopBar: View {
             }
             .padding(.horizontal, 20)
 
-            ModelSelector(model: $model)
+            ModelSelector(models: models, currentModelID: $currentModelID)
         }
         .frame(height: 52)
     }

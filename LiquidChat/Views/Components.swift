@@ -34,15 +34,20 @@ struct GlassCircleButton: View {
 // MARK: - 模型选择器（对应截图顶部「Qwen3.8 Flash ⌄」）
 
 struct ModelSelector: View {
-    @Binding var model: LLMModel
+    let models: [ModelConfig]
+    @Binding var currentModelID: String
     @State private var expanded = false
+
+    private var currentName: String {
+        models.first { $0.id == currentModelID }?.name ?? models.first?.name ?? "模型"
+    }
 
     var body: some View {
         Button(action: {
             withAnimation(.liquidBounce) { expanded.toggle() }
         }) {
             HStack(spacing: 5) {
-                Text(model.displayName)
+                Text(currentName)
                     .font(.system(size: 16.5, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Image(systemName: "chevron.down")
@@ -53,13 +58,56 @@ struct ModelSelector: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
         }
-        .confirmationDialog("选择模型", isPresented: $expanded, titleVisibility: .hidden) {
-            ForEach(LLMModel.allCases) { m in
-                Button(m.displayName) {
-                    withAnimation(.liquidFast) { model = m }
+        .confirmationDialog("选择模型", isPresented: $expanded, titleVisibility: .visible) {
+            ForEach(models) { m in
+                Button(m.name) {
+                    withAnimation(.liquidFast) { currentModelID = m.id }
                 }
             }
             Button("取消", role: .cancel) {}
+        }
+    }
+}
+
+// MARK: - Think 思考档位选择器（关闭/低/中/高）
+
+struct ThinkSelector: View {
+    @Binding var effort: ThinkingEffort
+
+    var body: some View {
+        Menu {
+            ForEach(ThinkingEffort.allCases) { level in
+                Button(action: {
+                    withAnimation(.liquidFast) { effort = level }
+                }) {
+                    HStack {
+                        Text(level.displayName)
+                        if effort == level {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text("Think")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(effort == .off ? Theme.textPrimary : Theme.chipPurpleText)
+                if effort != .off {
+                    Text(effort.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.chipPurpleText)
+                }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 31)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(effort == .off ? Color.clear : Theme.chipPurpleBg)
+            )
         }
     }
 }
@@ -112,8 +160,8 @@ struct GlassChip: View {
 
 struct ChatInputBar: View {
     @Binding var text: String
-    @Binding var deepThink: Bool
     @Binding var search: Bool
+    @Binding var thinkingEffort: ThinkingEffort
     @Binding var isRecording: Bool
     let isGenerating: Bool
     let onSend: () -> Void
@@ -158,35 +206,10 @@ struct ChatInputBar: View {
                         action: { search.toggle() }
                     )
 
-                    // 锤头工具 chip
-                    Button(action: {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.liquidFast) { deepThink.toggle() }
-                    }) {
-                        Image(systemName: "hammer.fill")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(deepThink ? Color.white : Theme.chipPurpleText)
-                            .frame(width: 31, height: 31)
-                            .background(
-                                Circle().fill(deepThink ? Theme.chipPurpleText : Theme.chipPurpleBg)
-                            )
-                    }
-
                     Spacer()
 
-                    // Think 下拉
-                    Button(action: {}) {
-                        HStack(spacing: 3) {
-                            Text("Think")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Theme.textPrimary)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Theme.textSecondary)
-                        }
-                        .padding(.horizontal, 9)
-                        .frame(height: 31)
-                    }
+                    // Think 档位
+                    ThinkSelector(effort: $thinkingEffort)
 
                     // 麦克风
                     GlassCircleButton(
