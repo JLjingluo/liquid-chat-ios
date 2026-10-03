@@ -27,6 +27,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.liquidchat.app
         PRODUCT_NAME: LiquidChat
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_FILE: LiquidChat/Info.plist
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""
@@ -41,7 +42,7 @@ targets:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         LSRequiresIPhoneOS: true
-        UILaunchScreen_Generation: true
+        UILaunchScreen: {}
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSMicrophoneUsageDescription: 用于语音输入对话

@@ -134,6 +134,8 @@ struct GlassChip: View {
                 Text(label)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isActive ? Theme.chipPurpleText : Theme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 11)
             .frame(height: 31)
