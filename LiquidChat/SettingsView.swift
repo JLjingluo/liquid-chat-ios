@@ -3,8 +3,11 @@ import SwiftUI
 // MARK: - 设置页（API + 模型管理）
 
 struct SettingsView: View {
-    @AppStorage("apiKey") private var apiKey = ""
     @AppStorage("baseURL") private var baseURL = "https://api.deepseek.com/v1"
+    @AppStorage("temperature") private var temperature = 0.6
+    @AppStorage("maxTokens") private var maxTokens = 0
+    @AppStorage("useTemperature") private var useTemperature = false
+    @AppStorage("useMaxTokens") private var useMaxTokens = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var tempKey = ""
@@ -26,7 +29,7 @@ struct SettingsView: View {
                 } header: {
                     Text("API 密钥")
                 } footer: {
-                    Text("保存在本机，不会上传。支持任意 OpenAI 兼容服务商。")
+                    Text("保存在本机 Keychain（加密），不会上传。支持任意 OpenAI 兼容服务商。")
                 }
 
                 Section {
@@ -90,6 +93,28 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("发送 temperature", isOn: $useTemperature)
+                    if useTemperature {
+                        HStack {
+                            Text("temperature")
+                            Slider(value: $temperature, in: 0...2, step: 0.1)
+                            Text(String(format: "%.1f", temperature))
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 34)
+                        }
+                    }
+                    Toggle("发送 max_tokens", isOn: $useMaxTokens)
+                    if useMaxTokens {
+                        Stepper("max_tokens: \(maxTokens)", value: $maxTokens, in: 256...32768, step: 256)
+                    }
+                } header: {
+                    Text("采样参数")
+                } footer: {
+                    Text("关闭开关则不发送该字段，由服务端使用默认值。部分模型（如 o 系列推理模型）不支持 temperature，发送后可能报错。")
+                }
+
+                Section {
                     HStack {
                         Text("当前 Provider")
                         Spacer()
@@ -105,21 +130,21 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") {
-                        apiKey = tempKey
+                        KeychainStore.writeAPIKey(tempKey)
                         baseURL = tempURL
                         dismiss()
                     }
                 }
             }
             .onAppear {
-                tempKey = apiKey
+                tempKey = KeychainStore.readAPIKey()
                 tempURL = baseURL
             }
         }
     }
 
     private var providerName: String {
-        switch LLMService.ProviderKind.detect(baseURL: tempURL) {
+        switch ProviderKind.detect(baseURL: tempURL) {
         case .dashscope: return "千问 / 阿里云百炼"
         case .deepseek: return "DeepSeek 官方"
         case .openai: return "OpenAI 官方 / Azure"

@@ -1,7 +1,9 @@
+import ChatGPTUI
 import SwiftUI
 
 struct ContentView: View {
     @StateObject private var vm = ChatViewModel()
+    @State private var chatVM = LiquidChatViewModel()
     @State private var showSettings = false
     @State private var showDrawer = false
 
@@ -13,44 +15,21 @@ struct ContentView: View {
                     models: vm.models,
                     currentModelID: $vm.currentModelID,
                     onMenu: { withAnimation(.liquidBounce) { showDrawer.toggle() } },
-                    onNew: { vm.newChat() }
+                    onNew: { newChat() }
                 )
 
-                // 消息区
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        if vm.messages.isEmpty {
-                            EmptyStateView(greeting: vm.greeting)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(vm.messages) { msg in
-                                    MessageBubble(message: msg)
-                                        .id(msg.id)
-                                }
-                                if !vm.thinkingText.isEmpty {
-                                    ThinkingCard(text: vm.thinkingText)
-                                }
-                            }
-                            .padding(.top, 8)
-                        }
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onChange(of: vm.messages.count) { _, _ in
-                        if let last = vm.messages.last {
-                            withAnimation(.liquidFast) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                }
+                // 消息区：采用 ChatGPTUI 的 MessageRowView 渲染
+                // （Markdown + 代码高亮 + 错误重试），输入框保留自有的液态玻璃版本
+                MessageListView(vm: chatVM)
+                    .layoutPriority(1)
 
                 ChatInputBar(
                     text: $vm.inputText,
                     search: $vm.search,
                     thinkingEffort: $vm.thinkingEffort,
                     isRecording: $vm.isRecording,
-                    isGenerating: vm.state != .idle,
-                    onSend: vm.send,
+                    isGenerating: chatVM.isPrompting,
+                    onSend: { send() },
                     onVoice: vm.toggleVoice
                 )
             }
@@ -70,7 +49,7 @@ struct ContentView: View {
                     },
                     onNewChat: {
                         withAnimation(.liquidBounce) { showDrawer = false }
-                        vm.newChat()
+                        newChat()
                     }
                 )
                 .transition(.move(edge: .leading))
@@ -79,10 +58,71 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(vm: vm)
         }
-        .alert("出错了", isPresented: $vm.showError) {
-            Button("好的") {}
-        } message: {
-            Text(vm.errorMessage ?? "未知错误")
+        .onAppear {
+            // 把 App 侧配置同步到 ChatGPTUI 的 ViewModel
+            chatVM.modelID = vm.currentModel.id
+            chatVM.enableSearch = vm.search
+            chatVM.thinkingEffort = vm.thinkingEffort
+        }
+        .onChange(of: vm.currentModelID) { _, newValue in
+            chatVM.modelID = newValue
+        }
+        .onChange(of: vm.search) { _, newValue in
+            chatVM.enableSearch = newValue
+        }
+        .onChange(of: vm.thinkingEffort) { _, newValue in
+            chatVM.thinkingEffort = newValue
+        }
+    }
+
+    // MARK: - 发送
+
+    private func send() {
+        let trimmed = vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !chatVM.isPrompting else { return }
+        vm.inputText = ""
+        Task { await chatVM.send(text: trimmed) }
+    }
+
+    private func newChat() {
+        chatVM.clearMessages()
+    }
+}
+
+// MARK: - 消息列表（ChatGPTUI 内核）
+
+/// 用 ChatGPTUI 的 `MessageRowView` 渲染消息列表。
+///
+/// 为什么不用它的 `TextChatView`：该视图自带输入行、Divider 布局和固定白色背景，
+/// 会与本App 保留的液态玻璃输入框重复渲染两套输入区。
+/// 这里只取其核心渲染能力（Markdown + 代码高亮 + 出错重试），
+/// 滚动与外层布局仍由 App 自己控制。
+struct MessageListView: View {
+    /// TextChatViewModel 继承自 @Observable 类，用 @Bindable 而非 @ObservedObject
+    @Bindable var vm: LiquidChatViewModel
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(vm.messages) { message in
+                        MessageRowView(message: message) { message in
+                            Task { @MainActor in
+                                await vm.retry(message: message)
+                            }
+                        }
+                        .id(message.id)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: vm.messages.last?.responseText) { _, _ in
+                guard let last = vm.messages.last else { return }
+                withAnimation(.liquidFast) {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
         }
     }
 }

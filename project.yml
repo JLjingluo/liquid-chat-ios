@@ -16,6 +16,11 @@ settings:
     SUPPORTS_MACCATALYST: NO
     SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
 
+packages:
+  ChatGPTUI:
+    url: https://github.com/alfianlosari/ChatGPTUI.git
+    from: "0.3.1"
+
 targets:
   LiquidChat:
     type: application
@@ -23,6 +28,9 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: LiquidChat
+    dependencies:
+      - package: ChatGPTUI
+        product: ChatGPTUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.liquidchat.app
