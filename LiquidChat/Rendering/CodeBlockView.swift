@@ -5,19 +5,20 @@
 //  完整许可证见同目录 LICENSE-ChatGPTUI。
 //
 
+import ChatGPTUI
 import SwiftUI
 import Markdown
 
 public enum HighlighterConstants {
-    static let color = Color(red: 38/255, green: 38/255, blue: 38/255)
+    public static let color = Color(red: 38/255, green: 38/255, blue: 38/255)
 }
 
 public struct CodeBlockView: View {
     
     public let parserResult: ParserResult
-    @State var isCopied = false
+    @State public var isCopied = false
     
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading) {
             header
                 .padding(.horizontal)
@@ -34,7 +35,7 @@ public struct CodeBlockView: View {
         .cornerRadius(8)
     }
     
-    var header: some View {
+    public var header: some View {
         HStack {
             if let codeBlockLanguage = parserResult.codeBlockLanguage {
                 Text(codeBlockLanguage.capitalized)
@@ -47,7 +48,7 @@ public struct CodeBlockView: View {
     }
     
     @ViewBuilder
-    var button: some View {
+    public var button: some View {
         if isCopied {
             HStack {
                 Text("Copied")

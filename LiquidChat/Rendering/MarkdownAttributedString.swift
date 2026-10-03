@@ -5,6 +5,7 @@
 //  完整许可证见同目录 LICENSE-ChatGPTUI。
 //
 
+import ChatGPTUI
 import Foundation
 #if os(macOS)
 import Cocoa

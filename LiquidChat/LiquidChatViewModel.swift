@@ -20,11 +20,11 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
     // MARK: - App 侧配置
 
     @AppStorage("baseURL") private var baseURL = "https://api.deepseek.com/v1"
-    @AppStorage("temperature") private var temperature = 0.6
+    @AppStorage("temperature") private var appTemperature = 0.6
     @AppStorage("maxTokens") private var maxTokens = 0
     @AppStorage("useTemperature") private var useTemperature = false
     @AppStorage("useMaxTokens") private var useMaxTokens = false
-    @AppStorage("systemPrompt") private var systemPrompt = "You're a helpful assistant"
+    @AppStorage("systemPrompt") private var appSystemPrompt = "You're a helpful assistant"
 
     /// 联网搜索开关（由 App 的 chip 控制）
     var enableSearch = false
@@ -77,7 +77,7 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
 
         // 构造上下文：可选 system + 历史消息（排除刚追加的那条空回复）
         var context: [ChatMessage] = []
-        let sys = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sys = appSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !sys.isEmpty {
             context.append(ChatMessage(role: .system, text: sys))
         }
@@ -98,7 +98,7 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
             baseURL: baseURL,
             enableSearch: enableSearch,
             thinkingEffort: thinkingEffort,
-            temperature: useTemperature ? temperature : nil,
+            temperature: useTemperature ? appTemperature : nil,
             maxTokens: useMaxTokens ? maxTokens : nil
         )
 

@@ -12,6 +12,7 @@
 //  Created by Alfian Losari on 19/05/24.
 //
 
+import ChatGPTUI
 import Foundation
 import Markdown
 
