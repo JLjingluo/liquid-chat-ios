@@ -37,13 +37,23 @@ actor LLMService {
         }
     }
 
-    // MARK: - 流式对话
+    /// 判断端点是否支持 enable_search 参数
+    /// 千问 / 阿里云百炼（含其托管的 deepseek、glm、kimi 模型）支持
+    /// DeepSeek 官方 api.deepseek.com 的 /chat/completions 不支持（需走 Responses API）
+    private static func supportsSearchParam(baseURL: String) -> Bool {
+        let host = baseURL.lowercased()
+        return host.contains("dashscope") ||
+               host.contains("aliyuncs") ||
+               host.contains("maas") ||
+               host.contains("qwencloud")
+    }
 
     func chatStream(
         messages: [ChatMessage],
         model: LLMModel,
         apiKey: String,
-        baseURL: String
+        baseURL: String,
+        enableSearch: Bool
     ) -> AsyncThrowingStream<StreamResult, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -62,12 +72,21 @@ actor LLMService {
                     request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
 
-                    let payload: [String: Any] = [
+                    var payload: [String: Any] = [
                         "model": model.rawValue,
                         "messages": messages.map { ["role": $0.role.rawValue, "content": $0.text] },
                         "stream": true,
                         "temperature": 0.7
                     ]
+
+                    // 联网搜索：千问 / 阿里云百炼（含其托管的 deepseek 模型）原生支持
+                    // enable_search 参数。仅在兼容端点上注入，避免 DeepSeek 官方
+                    // /chat/completions 因未知参数报错。
+                    if enableSearch && Self.supportsSearchParam(baseURL: baseURL) {
+                        payload["enable_search"] = true
+                        payload["search_options"] = ["enable_source": true]
+                    }
+
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
                     let (bytes, response) = try await session.bytes(for: request)

@@ -46,7 +46,8 @@ class ChatViewModel: ObservableObject {
                 messages: messages,
                 model: model,
                 apiKey: apiKey,
-                baseURL: baseURL
+                baseURL: baseURL,
+                enableSearch: search
             )
 
             var assistantMsg = ChatMessage(role: .assistant, text: "", isThinking: model == .reasoner)

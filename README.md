@@ -137,9 +137,23 @@ git push -u origin main
 
 ---
 
-## 七、iOS 26 液态玻璃说明
+## 七、联网搜索（已实装，非占位）
 
-| 修饰符 | 用途 | iOS 版本 |
+「智能搜索」chip 是**真实功能**，不是占位。开启后按 provider 自动注入对应参数：
+
+| Provider | 端点 | 注入参数 | 说明 |
+|---|---|---|---|
+| **千问 Qwen** | `dashscope.aliyuncs.com/compatible-mode/v1` | `enable_search: true` + `search_options` | ✅ 官方原生支持 |
+| **阿里云百炼托管模型** | `*.maas.aliyuncs.com` / `*.aliyuncs.com` | `enable_search: true` | ✅ 含 deepseek-v4、glm-5.2、kimi-k3 |
+| **DeepSeek 官方** | `api.deepseek.com` | 不注入 | ⚠️ 其 `/chat/completions` 无此参数，需走 Responses API |
+
+**代码自动判断**（`LLMService.supportsSearchParam`）：检测到 `dashscope` / `aliyuncs` / `maas` / `qwencloud` 域名时注入 `enable_search`，避免向不支持的端点发未知参数报错。
+
+**搜索结果展示**：千问返回 `search_results` 时会带引用来源，当前 UI 显示回答正文；来源列表展示可后续加（`search_info` 字段已可获取）。
+
+> 修正说明：此前误标「智能搜索为 UI 占位」，实际千问/百炼 API 原生支持，已改为真实注入。
+
+## 八、iOS 26 液态玻璃说明
 |---|---|---|
 | `.glassEffect(.regular, in: .rect(...))` | 卡片/输入框 | 26+ |
 | `.glassEffect(.regular, in: .capsule)` | 胶囊按钮 | 26+ |
@@ -150,7 +164,7 @@ git push -u origin main
 
 ---
 
-## 八、常见问题
+## 九、常见问题
 
 | 问题 | 原因 | 解决 |
 |---|---|---|
@@ -159,11 +173,12 @@ git push -u origin main
 | 装到手机打不开 | 未信任开发者 | 设置 → 通用 → VPN与设备管理 → 信任 |
 | 7 天后闪退 | 免费证书过期 | Sideloadly 重新签名安装 |
 | 深度思考不显示过程 | 模型选成 Flash | 切换「深度思考 R1」或点锤头 chip |
+| 智能搜索无结果 | 端点不支持该参数 | 改用千问/百炼端点，DeepSeek 官方需 Responses API |
 | 千问连不上 | Base URL 没改 | 设置里改成千问兼容地址 |
 
 ---
 
-## 九、技术栈
+## 十、技术栈
 
 - **语言**：Swift 6（strict concurrency）
 - **UI**：SwiftUI + iOS 26 Liquid Glass
