@@ -121,7 +121,7 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
                             || content.contains("```")
                             || content.contains("\n")
                         if shouldReparse {
-                            let output = await parsingTask.parse(text: streamText)
+                            let output = (await parsingTask.parseSendable(text: streamText)).attributedOutput
                             parsedLength = streamText.count
                             messageRow.response = .attributed(output)
                         }
@@ -138,7 +138,7 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
 
             // 收尾：确保最终内容已解析
             if renderAsMarkdown {
-                messageRow.response = .attributed(await parsingTask.parse(text: streamText))
+                messageRow.response = .attributed((await parsingTask.parseSendable(text: streamText)).attributedOutput)
             } else if streamText.isEmpty {
                 messageRow.response = .rawText("")
             }
@@ -184,7 +184,7 @@ final class LiquidChatViewModel: TextChatViewModel<Text> {
     ) async {
         var row = messageRow
         if renderAsMarkdown {
-            row.response = .attributed(await parsingTask.parse(text: streamText))
+            row.response = .attributed((await parsingTask.parseSendable(text: streamText)).attributedOutput)
         }
         row.isPrompting = false
         messages[index] = row
